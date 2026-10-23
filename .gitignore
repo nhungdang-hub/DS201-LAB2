@@ -1,0 +1,24 @@
+# Dữ liệu ảnh và output huấn luyện lớn
+dataset/
+checkpoints/
+*.pt
+*.pth
+
+# Python/Jupyter caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.mypy_cache/
+.ruff_cache/
+
+# Môi trường và IDE
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
