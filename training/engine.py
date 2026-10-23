@@ -142,6 +142,26 @@ def _plot_history(history: list[dict[str, float]], output_path: Path) -> None:
     plt.close(figure)
 
 
+def _save_checkpoint(
+    path: Path,
+    model: nn.Module,
+    optimizer: Optimizer,
+    epoch: int,
+    validation_metrics: dict[str, float],
+    class_to_idx: dict[str, int],
+) -> None:
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "epoch": epoch,
+            "validation_metrics": validation_metrics,
+            "class_to_idx": class_to_idx,
+        },
+        path,
+    )
+
+
 def fit(
     model: nn.Module,
     train_loader: DataLoader,
@@ -153,7 +173,7 @@ def fit(
     num_classes: int,
     checkpoint_dir: str | Path,
     class_to_idx: dict[str, int],
-    initial_best_score: float = float("-inf"),
+    initial_validation_metrics: dict[str, float] | None = None,
     frozen_eval_modules: Sequence[nn.Module] = (),
 ) -> tuple[list[dict[str, float]], float]:
     """Train và lưu checkpoint tốt nhất dựa duy nhất trên validation F1-macro."""
@@ -161,7 +181,20 @@ def fit(
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     best_path = checkpoint_dir / "best_model.pt"
     history: list[dict[str, float]] = []
-    best_score = initial_best_score
+    best_score = float("-inf")
+    if initial_validation_metrics is not None:
+        if "f1_macro" not in initial_validation_metrics:
+            raise ValueError("initial_validation_metrics phải chứa f1_macro.")
+        best_score = initial_validation_metrics["f1_macro"]
+        # Epoch 0 là model tốt nhất của phase trước, dùng làm baseline an toàn.
+        _save_checkpoint(
+            best_path,
+            model,
+            optimizer,
+            epoch=0,
+            validation_metrics=initial_validation_metrics,
+            class_to_idx=class_to_idx,
+        )
     for epoch in range(1, epochs + 1):
         train_loss = train_one_epoch(
             train_loader,
@@ -181,15 +214,13 @@ def fit(
         print(json.dumps(row, ensure_ascii=False))
         if validation["f1_macro"] > best_score:
             best_score = validation["f1_macro"]
-            torch.save(
-                {
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "epoch": epoch,
-                    "validation_metrics": validation,
-                    "class_to_idx": class_to_idx,
-                },
+            _save_checkpoint(
                 best_path,
+                model,
+                optimizer,
+                epoch=epoch,
+                validation_metrics=validation,
+                class_to_idx=class_to_idx,
             )
 
     history_path = checkpoint_dir / "history.json"

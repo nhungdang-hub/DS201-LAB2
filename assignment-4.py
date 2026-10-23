@@ -79,12 +79,13 @@ def main() -> None:
         args.validation_ratio, args.seed, processor=processor,
     )
     label2id = loaders.class_to_idx
+    num_classes = len(label2id)
     id2label = {index: label for label, index in label2id.items()}
     print("Thống kê dataset:", json.dumps(loaders.statistics, ensure_ascii=False, indent=2))
     print(f"Thiết bị: {device}")
     model = AutoModelForImageClassification.from_pretrained(
         MODEL_NAME,
-        num_labels=21,
+        num_labels=num_classes,
         label2id=label2id,
         id2label=id2label,
         ignore_mismatched_sizes=True,
@@ -96,32 +97,31 @@ def main() -> None:
     for parameter in model.resnet.parameters():
         parameter.requires_grad = False
     head_optimizer = optim.Adam(model.classifier.parameters(), lr=args.head_learning_rate)
-    _, head_best = fit(
+    fit(
         model, loaders.train, loaders.validation, head_optimizer, loss_fn, device,
-        args.head_epochs, 21, output_dir / "phase1", label2id,
+        args.head_epochs, num_classes, output_dir / "phase1", label2id,
         frozen_eval_modules=(model.resnet,),
     )
 
     # Giai đoạn 2: mở stage cuối; dùng LR backbone nhỏ hơn LR head.
     for parameter in model.resnet.encoder.stages[-1].parameters():
         parameter.requires_grad = True
+    frozen_backbone = (
+        model.resnet.embedder,
+        *model.resnet.encoder.stages[:-1],
+    )
     optimizer = optim.Adam([
         {"params": model.resnet.encoder.stages[-1].parameters(), "lr": args.learning_rate},
         {"params": model.classifier.parameters(), "lr": args.head_learning_rate},
     ])
-    initial_metrics = evaluate(loaders.validation, model, loss_fn, device, 21)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "epoch": 0,
-        "validation_metrics": initial_metrics,
-        "class_to_idx": label2id,
-    }, output_dir / "best_model.pt")
+    initial_metrics = evaluate(
+        loaders.validation, model, loss_fn, device, num_classes
+    )
     fit(
         model, loaders.train, loaders.validation, optimizer, loss_fn, device,
-        args.epochs, 21, output_dir, label2id,
-        initial_best_score=max(head_best, initial_metrics["f1_macro"]),
+        args.epochs, num_classes, output_dir, label2id,
+        initial_validation_metrics=initial_metrics,
+        frozen_eval_modules=frozen_backbone,
     )
 
     # Lưu định dạng Hugging Face để nạp lại đồng thời model và processor.
@@ -129,7 +129,7 @@ def main() -> None:
     model.save_pretrained(hf_dir)
     processor.save_pretrained(hf_dir)
     if loaders.test is not None:
-        print("Test:", evaluate(loaders.test, model, loss_fn, device, 21))
+        print("Test:", evaluate(loaders.test, model, loss_fn, device, num_classes))
     else:
         print("Dataset không có test split; bỏ qua đánh giá test.")
 

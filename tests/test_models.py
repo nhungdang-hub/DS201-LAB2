@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 from torch import nn, optim
@@ -10,7 +12,7 @@ from torch.utils.data import DataLoader, Dataset
 from models.googlenet import GoogLeNet, InceptionBlock
 from models.resnet18 import BasicBlock, ResNet18
 from training.metrics import classification_metrics
-from training.engine import train_one_epoch
+from training.engine import evaluate, fit, train_one_epoch
 
 
 @torch.no_grad()
@@ -115,6 +117,79 @@ def test_frozen_backbone_keeps_batchnorm_statistics() -> None:
     )
     assert torch.equal(model.backbone[1].running_mean, running_mean)
     assert model.backbone.training is False
+
+
+def test_engine_accepts_huggingface_style_logits_object() -> None:
+    class ObjectOutputModel(nn.Module):
+        def forward(self, inputs: torch.Tensor) -> SimpleNamespace:
+            return SimpleNamespace(logits=inputs)
+
+    samples = [
+        {"image": torch.tensor([4.0, 1.0]), "label": torch.tensor(0)},
+        {"image": torch.tensor([1.0, 4.0]), "label": torch.tensor(1)},
+    ]
+    metrics = evaluate(
+        DataLoader(samples, batch_size=2),
+        ObjectOutputModel(),
+        nn.CrossEntropyLoss(),
+        torch.device("cpu"),
+        num_classes=2,
+    )
+    assert metrics["accuracy"] == 1.0
+
+
+def test_fit_restores_initial_best_when_new_epoch_is_worse(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = nn.Linear(1, 2, bias=False)
+    with torch.no_grad():
+        model.weight.fill_(7.0)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    loader = DataLoader(
+        [{"image": torch.ones(1), "label": torch.tensor(0)}], batch_size=1
+    )
+
+    def fake_train(*args, **kwargs) -> float:
+        with torch.no_grad():
+            model.weight.fill_(1.0)
+        return 0.5
+
+    def fake_evaluate(*args, **kwargs) -> dict[str, float]:
+        return {
+            "loss": 0.5,
+            "accuracy": 0.5,
+            "precision_macro": 0.5,
+            "recall_macro": 0.5,
+            "f1_macro": 0.5,
+        }
+
+    monkeypatch.setattr("training.engine.train_one_epoch", fake_train)
+    monkeypatch.setattr("training.engine.evaluate", fake_evaluate)
+    monkeypatch.setattr("training.engine._plot_history", lambda *args: None)
+    initial_metrics = {
+        "loss": 0.2,
+        "accuracy": 0.9,
+        "precision_macro": 0.9,
+        "recall_macro": 0.9,
+        "f1_macro": 0.9,
+    }
+    fit(
+        model,
+        loader,
+        loader,
+        optimizer,
+        nn.CrossEntropyLoss(),
+        torch.device("cpu"),
+        epochs=1,
+        num_classes=2,
+        checkpoint_dir=tmp_path,
+        class_to_idx={"a": 0, "b": 1},
+        initial_validation_metrics=initial_metrics,
+    )
+    assert torch.equal(model.weight, torch.full_like(model.weight, 7.0))
+    checkpoint = torch.load(tmp_path / "best_model.pt", weights_only=False)
+    assert checkpoint["epoch"] == 0
+    assert checkpoint["validation_metrics"]["f1_macro"] == 0.9
 
 
 def test_huggingface_resnet50_classifier_when_cached() -> None:

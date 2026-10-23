@@ -17,7 +17,6 @@ from training.engine import (
     seed_everything,
 )
 
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", default="dataset/VinaFood21")
@@ -40,17 +39,18 @@ def main() -> None:
         args.data_root, args.batch_size, args.num_workers,
         args.validation_ratio, args.seed,
     )
+    num_classes = len(loaders.class_to_idx)
     print("Thống kê dataset:", json.dumps(loaders.statistics, ensure_ascii=False, indent=2))
     print(f"Thiết bị: {device}")
-    model = ResNet18(num_classes=21).to(device)
+    model = ResNet18(num_classes=num_classes).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     fit(
         model, loaders.train, loaders.validation, optimizer, loss_fn, device,
-        args.epochs, 21, "checkpoints/assignment-3", loaders.class_to_idx,
+        args.epochs, num_classes, "checkpoints/assignment-3", loaders.class_to_idx,
     )
     if loaders.test is not None:
-        print("Test:", evaluate(loaders.test, model, loss_fn, device, 21))
+        print("Test:", evaluate(loaders.test, model, loss_fn, device, num_classes))
     else:
         print("Dataset không có test split; bỏ qua đánh giá test.")
 
