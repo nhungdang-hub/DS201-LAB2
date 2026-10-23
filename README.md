@@ -80,7 +80,8 @@ Bài 4 nạp thật checkpoint `microsoft/resnet-50` bằng
 `ignore_mismatched_sizes=True` chỉ để thay classification head. Fine-tuning gồm:
 
 - Giai đoạn 1: đóng băng toàn bộ `model.resnet`, chỉ train classifier.
-- Giai đoạn 2: mở stage cuối của backbone; backbone dùng LR nhỏ, head dùng LR lớn.
+- Giai đoạn 2: mở stage cuối của backbone; backbone dùng LR nhỏ, head dùng LR lớn;
+  embedder và các stage còn đóng băng tiếp tục ở `eval()`.
 
 Trong giai đoạn 1, backbone được giữ ở `eval()` để BatchNorm không âm thầm cập
 nhật running statistics khi weights đã bị đóng băng.
@@ -172,7 +173,23 @@ ghi vào `/kaggle/working/<TEN_REPOSITORY>/checkpoints/` để có thể tải v
 
 ## 7. Kết quả thực nghiệm
 
-Không điền số liệu khi chưa huấn luyện trên dữ liệu thật.
+### Bài 1 — LeNet trên MNIST
+
+Đã chạy đủ 10 epoch trên CPU với batch size 32. Thời gian huấn luyện và đánh giá
+khoảng 6 phút; checkpoint tốt nhất được lưu tại
+`checkpoints/assignment-1/best_model.pth`.
+
+| Accuracy | Precision macro | Recall macro | F1 macro |
+|---:|---:|---:|---:|
+| 98.46% | 98.43% | 98.47% | 98.44% |
+
+Checkpoint tốt nhất đã được nạp lại và đánh giá trên toàn bộ 10.000 ảnh test.
+Code mẫu dùng chính tập test để chọn checkpoint nên kết quả này chỉ dùng để báo
+cáo Bài 1, không so sánh trực tiếp với các mô hình VinaFood21 bên dưới.
+
+### Bài 2–4 — VinaFood21
+
+Chỉ điền số liệu sau khi mô hình đã được huấn luyện trên dữ liệu thật.
 
 | Model | Accuracy | Precision macro | Recall macro | F1 macro |
 |---|---:|---:|---:|---:|
@@ -187,10 +204,12 @@ Validation dùng để chọn model; test chỉ được gọi sau khi checkpoin
 
 ## 8. Trạng thái kiểm thử hiện tại
 
-Trên môi trường CPU hiện tại: 7 test đã pass (forward/shape GoogLeNet và
+Trên môi trường CPU hiện tại: 9 test đã pass (forward/shape GoogLeNet và
 ResNet-18, channel Inception, 8 BasicBlock, pooling riêng, projection shortcut,
 metrics với batch lớn hơn 1, một bước forward/backward/Adam và việc giữ BatchNorm
-của backbone đóng băng). Test Hugging Face được skip vì checkpoint chưa có trong
-cache. MNIST thật đã qua một bước forward/backward; VinaFood21 thật đã qua kiểm
-tra discovery, stratified split và batch PIL ở cả train/validation/test. Full
-training chưa được chạy và không có metric thực nghiệm giả.
+của backbone đóng băng). Engine còn được kiểm tra với output kiểu Hugging Face
+`.logits` và trường hợp phase mới không cải thiện thì phải khôi phục checkpoint
+baseline tốt hơn. Test tải weights Hugging Face được skip vì checkpoint chưa có
+trong cache. MNIST thật đã qua một bước forward/backward; VinaFood21 thật đã qua
+kiểm tra discovery, stratified split và batch PIL ở cả train/validation/test.
+Full training chưa được chạy và không có metric thực nghiệm giả.
