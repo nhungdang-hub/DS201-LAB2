@@ -189,13 +189,20 @@ cáo Bài 1, không so sánh trực tiếp với các mô hình VinaFood21 bên 
 
 ### Bài 2–4 — VinaFood21
 
-Chỉ điền số liệu sau khi mô hình đã được huấn luyện trên dữ liệu thật.
+Các số liệu dưới đây chỉ được điền sau khi mô hình đã được huấn luyện và đánh giá
+trên dữ liệu thật.
 
 | Model | Accuracy | Precision macro | Recall macro | F1 macro |
 |---|---:|---:|---:|---:|
-| GoogLeNet (scratch) | Chưa chạy | Chưa chạy | Chưa chạy | Chưa chạy |
+| GoogLeNet (scratch) | 46.14% | 48.14% | 44.32% | 44.36% |
 | ResNet-18 (scratch) | Chưa chạy | Chưa chạy | Chưa chạy | Chưa chạy |
 | ResNet-50 pretrained | Chưa chạy | Chưa chạy | Chưa chạy | Chưa chạy |
+
+GoogLeNet được train từ đầu trong 30 epoch trên CPU với Adam, batch size 32 và
+learning rate 1e-3. Checkpoint tốt nhất ở epoch 30, đạt validation accuracy
+52.99% và validation F1-macro 51.18%; khi đánh giá trên 6.682 ảnh test, model đạt
+các kết quả trong bảng. Lịch sử huấn luyện và checkpoint nằm tại
+`checkpoints/assignment-2/` (không đưa lên GitHub).
 
 Sau khi train, lấy metric test được in bởi script hoặc từ log thực tế để cập nhật
 bảng và chỉ so sánh ba model khi cả ba đã được đánh giá trên cùng test split.
@@ -212,4 +219,5 @@ của backbone đóng băng). Engine còn được kiểm tra với output kiể
 baseline tốt hơn. Test tải weights Hugging Face được skip vì checkpoint chưa có
 trong cache. MNIST thật đã qua một bước forward/backward; VinaFood21 thật đã qua
 kiểm tra discovery, stratified split và batch PIL ở cả train/validation/test.
-Full training chưa được chạy và không có metric thực nghiệm giả.
+Bài 2 đã hoàn thành full training 30 epoch; Bài 3 và Bài 4 chưa chạy full training.
+Không sử dụng metric thực nghiệm giả.
